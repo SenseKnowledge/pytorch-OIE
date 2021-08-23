@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import torch
+
 from typing import List, Dict
 import json
 
@@ -35,5 +37,10 @@ def read_json_data(path: str) -> List[Dict]:
     with open(path, 'r', encoding='utf-8') as f:
         return [json.loads(line) for line in f]
 
-def dump_oie_file(path: str, obj):
-    pass
+
+def att_CE_Loss(logits, attention_mask, label):
+    loss_fn = torch.nn.CrossEntropyLoss()
+    logits = logits.view(-1, logits.size(-1))
+    label = torch.where(attention_mask.view(-1) == 1, label.view(-1), torch.tensor(loss_fn.ignore_index).type_as(label))
+    loss = loss_fn(logits, label)
+    return loss

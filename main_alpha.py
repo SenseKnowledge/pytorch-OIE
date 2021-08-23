@@ -1,28 +1,28 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from package.seq_dataset import SeqDataset, DataLoader
-from package.seq_model import BertSeqTagConfig, BertSeqTagModel
+from package.dataset.dense import Dataset, DataLoader
+from package.model.alpha import AlphaModel, AlphaConfig
 from tqdm import tqdm
 
-lr = 3e-4
+lr = 5e-3
 num_workers = 0
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-config = BertSeqTagConfig(pos_embedding_dim=64,
-                          fc_1_hidden_size=768, fc_1_dropout_rate=0.2,
-                          fc_2_hidden_size=768, fc_2_dropout_rate=0.2,
-                          pretrained_model_name_or_path='bert-base-multilingual-cased'
-                          )
-model = BertSeqTagModel(config).to(device)
+config = AlphaConfig(pretrained_model_name_or_path='bert-base-multilingual-cased', pos_embedding_dim=64,
+                     fc_1_hidden_size=768, fc_1_dropout_rate=0.2,
+                     fc_2_hidden_size=768, fc_2_dropout_rate=0.2,
+                     pre_tag_size=3, arg_tag_size=9
+                     )
+model = AlphaModel(config).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-dataset = SeqDataset('./resource/SAOKE/SAOKE_DATA.json.json', model.tokenizer)
-dataloader = DataLoader(dataset, batch_size=4, collate_fn=dataset.collate_fn, shuffle=True, num_workers=num_workers)
+dataset = Dataset('./resource/SAOKE/SAOKE_DATA.json.json', model.tokenizer)
+dataloader = DataLoader(dataset, batch_size=128, collate_fn=dataset.collate_fn, shuffle=True, num_workers=num_workers)
 
 if __name__ == '__main__':
 
-    for i in range(50):
+    for i in range(200):
         with tqdm(total=len(dataloader), desc=f'Epoch {i}: Training ...') as t:
             for batch in dataloader:
                 optimizer.zero_grad()
@@ -40,4 +40,5 @@ if __name__ == '__main__':
                 t.update()
                 t.set_postfix(loss=loss.item(), loss_pre=loss_pre.item(), loss_arg=loss_arg.item())
 
-        torch.save(model.state_dict(), f"model_{i}.pth")
+        if (i + 1) % 25 == 0:
+            torch.save(model.state_dict(), f"model_{i}.pth")

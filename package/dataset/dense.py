@@ -2,14 +2,14 @@
 import torch
 
 from package.utils import read_json_data
-from package.seq_utils import pre_tag2idx, arg_tag2idx
-from torch.utils.data import Dataset, DataLoader
+from package.utils.dense import pre_tag2idx, arg_tag2idx
+from torch.utils.data import Dataset as _Dataset, DataLoader
 from transformers import PreTrainedTokenizer
-from random import randint
 from collections import Counter
+from random import randint
 
 
-class SeqDataset(Dataset):
+class Dataset(_Dataset):
 
     def __init__(self, data_path, tokenizer: PreTrainedTokenizer):
         self.data = read_json_data(data_path)
@@ -20,6 +20,7 @@ class SeqDataset(Dataset):
         text = _data['text']
         label = _data['label']
 
+        # fill slots
         tags_pre, tags_arg = [], []
         for _label in label:
 
@@ -66,6 +67,8 @@ class SeqDataset(Dataset):
     def collate_fn(self, batch):
         """collate_fn for 'torch.utils.data.DataLoader'
         """
+
+        # flatten
         batch_text = []
         batch_tags_pre = []
         batch_tags_arg = []
@@ -74,9 +77,10 @@ class SeqDataset(Dataset):
             batch_tags_pre.append(tags_pre)
             batch_tags_arg.append(tags_arg)
 
-        token = self.tokenizer(batch_text, padding=False, return_offsets_mapping=True)
+        token = self.tokenizer(batch_text, return_offsets_mapping=True)
         batch_tags_pre_all = [self._combine_pre_tags(_) for _ in batch_tags_pre]
 
+        # sample args pair for each predicate
         batch_tags_pre_sample, batch_tags_arg_sample = [], []
         for tags_pre, tags_arg in zip(batch_tags_pre, batch_tags_arg):
             i = randint(0, len(tags_pre) - 1)
@@ -85,21 +89,21 @@ class SeqDataset(Dataset):
 
         # align the label
         # Bert mat split a word 'AA' into 'A' and '##A'
-        batch_tags_pre_all = [self._align_pre_label(offset, tags) for offset, tags in
+        batch_tags_pre_all = [self._align_label(offset, tags, pre_tag2idx) for offset, tags in
                               zip(token['offset_mapping'], batch_tags_pre_all)]
-        batch_tags_pre = [self._align_pre_label(offset, tags) for offset, tags in
+        batch_tags_pre = [self._align_label(offset, tags, pre_tag2idx) for offset, tags in
                           zip(token['offset_mapping'], batch_tags_pre_sample)]
-        batch_tags_arg = [self._align_arg_label(offset, tags) for offset, tags in
+        batch_tags_arg = [self._align_label(offset, tags, arg_tag2idx) for offset, tags in
                           zip(token['offset_mapping'], batch_tags_arg_sample)]
 
-        token = self.tokenizer.pad(token, padding=True)
-        input_ids = torch.LongTensor(token['input_ids'])
-        attention_mask = torch.ByteTensor(token['attention_mask'])
+        token = self.tokenizer.pad(token)
+        input_ids = torch.LongTensor(token.input_ids)
+        attention_mask = torch.ByteTensor(token.attention_mask)
         max_len = input_ids.size(-1)
         return (input_ids, attention_mask,
-                self._pad_pre_label(batch_tags_pre_all, max_len),
-                self._pad_pre_label(batch_tags_pre, max_len),
-                self._pad_arg_label(batch_tags_arg, max_len))
+                self._pad_label(batch_tags_pre_all, max_len, pre_tag2idx),
+                self._pad_label(batch_tags_pre, max_len, pre_tag2idx),
+                self._pad_label(batch_tags_arg, max_len, arg_tag2idx))
 
     @staticmethod
     def _combine_pre_tags(tags):
@@ -115,56 +119,21 @@ class SeqDataset(Dataset):
         return tag_combine
 
     @staticmethod
-    def _align_pre_label(offset, tags):
+    def _align_label(offset, tags, tag2idx):
+
+        def _tag_vote(tags):
+            return Counter(tags).most_common(1)[0][0]
 
         label_align = []
         for i, (start, end) in enumerate(offset):
 
             if start == end:
-                label_align.append(pre_tag2idx['O'])
+                label_align.append(tag2idx['O'])
             else:
-                label_align.append(SeqDataset._tag_vote(tags[start:end]))
+                label_align.append(_tag_vote(tags[start:end]))
         return label_align
 
     @staticmethod
-    def _align_arg_label(offset, tags):
-
-        label_align = []
-        for i, (start, end) in enumerate(offset):
-
-            if start == end:
-                label_align.append(arg_tag2idx['O'])
-            else:
-                label_align.append(SeqDataset._tag_vote(tags[start:end]))
-        return label_align
-
-    @staticmethod
-    def _tag_vote(tags):
-        return Counter(tags).most_common(1)[0][0]
-
-    @staticmethod
-    def _pad_pre_label(labels, max_len):
-        labels = [(label + [pre_tag2idx['O']] * (max_len - len(label))) for label in labels]
+    def _pad_label(labels, max_len, tag2idx):
+        labels = [(label + [tag2idx['O']] * (max_len - len(label))) for label in labels]
         return torch.LongTensor(labels)
-
-    @staticmethod
-    def _pad_arg_label(labels, max_len):
-        labels = [(label + [arg_tag2idx['O']] * (max_len - len(label))) for label in labels]
-        return torch.LongTensor(labels)
-
-
-if __name__ == '__main__':
-    from transformers import AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained('bert-base-multilingual-cased')
-    dataset = SeqDataset('../resource/OIE2016/train.oie.json', tokenizer)
-    dataset = DataLoader(dataset, batch_size=32, collate_fn=dataset.collate_fn)
-
-    for input_ids, mask, pre_label_all, pre_label, arg_label in dataset:
-        print(input_ids.shape, mask.shape, pre_label_all.shape, pre_label.shape, arg_label.shape)
-
-        for a, b, c, d in zip(pre_label, input_ids, pre_label_all, arg_label):
-            if not any(a):
-                print(a, b, c, d)
-                print(tokenizer.convert_tokens_to_string(tokenizer.convert_ids_to_tokens(b)))
-                raise Warning()

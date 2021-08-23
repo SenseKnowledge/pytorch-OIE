@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import List, Optional
-
 import torch
 import torch.nn as nn
+
+from typing import Optional
 
 
 class ConditionalRandomField(nn.Module):
@@ -27,9 +27,10 @@ class ConditionalRandomField(nn.Module):
     .. _Viterbi algorithm: https://en.wikipedia.org/wiki/Viterbi_algorithm
     """
 
-    def __init__(self, num_tags: int) -> None:
+    def __init__(self, num_tags: int, padding_idx: int = 0) -> None:
         super(ConditionalRandomField, self).__init__()
         self.num_tags = num_tags
+        self.padding_idx = padding_idx
 
         self.start_transitions = nn.Parameter(torch.empty(num_tags))
         self.end_transitions = nn.Parameter(torch.empty(num_tags))
@@ -49,7 +50,7 @@ class ConditionalRandomField(nn.Module):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(num_tags={self.num_tags})"
 
-    def neg_log_likelihood_loss(self, input: torch.Tensor, mask: Optional[torch.ByteTensor],
+    def neg_log_likelihood_loss(self, input: torch.Tensor, mask: Optional[torch.LongTensor],
                                 target: torch.LongTensor, ) -> torch.Tensor:
         """Compute the conditional log likelihood of a sequence of tags given input scores.
         Args:
@@ -77,10 +78,10 @@ class ConditionalRandomField(nn.Module):
         # shape: (batch_size,)
         denominator = self._compute_normalizer(input, mask)
         # shape: (batch_size,)
-        llh = torch.sum(denominator - numerator)
+        llh = torch.mean(denominator - numerator)
         return llh
 
-    def forward(self, input: torch.Tensor, mask: Optional[torch.ByteTensor] = None) -> List[List[int]]:
+    def forward(self, input: torch.Tensor, mask: Optional[torch.ByteTensor] = None) -> torch.Tensor:
         """Find the most likely tag sequence using Viterbi algorithm.
         Args:
             input (`~torch.Tensor`): Emission score tensor of size
@@ -100,7 +101,7 @@ class ConditionalRandomField(nn.Module):
 
         return self._viterbi_decode(input, mask)
 
-    def _compute_score(self, input: torch.Tensor, target: torch.LongTensor, mask: torch.ByteTensor) -> torch.Tensor:
+    def _compute_score(self, input: torch.Tensor, target: torch.LongTensor, mask: torch.LongTensor) -> torch.Tensor:
         # input: (seq_length, batch_size, num_tags)
         # tags: (seq_length, batch_size)
         # mask: (seq_length, batch_size)
@@ -124,7 +125,7 @@ class ConditionalRandomField(nn.Module):
 
         # End transition score
         # shape: (batch_size,)
-        seq_ends = mask.long().sum(dim=0) - 1
+        seq_ends = mask.sum(dim=0).long() - 1
         # shape: (batch_size,)
         last_tags = target[seq_ends, torch.arange(batch_size)]
         # shape: (batch_size,)
@@ -132,7 +133,7 @@ class ConditionalRandomField(nn.Module):
 
         return score
 
-    def _compute_normalizer(self, input: torch.Tensor, mask: torch.ByteTensor) -> torch.Tensor:
+    def _compute_normalizer(self, input: torch.Tensor, mask: torch.LongTensor) -> torch.Tensor:
         # input: (seq_length, batch_size, num_tags)
         # mask: (seq_length, batch_size)
 
@@ -168,7 +169,7 @@ class ConditionalRandomField(nn.Module):
 
             # Set score to the next score if this time_step is valid (mask == 1)
             # shape: (batch_size, num_tags)
-            score = torch.where(mask[i].unsqueeze(1), next_score, score)
+            score = torch.where(mask[i].unsqueeze(1).byte(), next_score, score)
 
         # End transition score
         # shape: (batch_size, num_tags)
@@ -178,7 +179,7 @@ class ConditionalRandomField(nn.Module):
         # shape: (batch_size,)
         return torch.logsumexp(score, dim=1)
 
-    def _viterbi_decode(self, input: torch.FloatTensor, mask: torch.ByteTensor) -> List[List[int]]:
+    def _viterbi_decode(self, input: torch.FloatTensor, mask: torch.LongTensor) -> torch.Tensor:
         # emissions: (seq_length, batch_size, num_tags)
         # mask: (seq_length, batch_size)
         assert input.dim() == 3 and mask.dim() == 2
@@ -223,7 +224,7 @@ class ConditionalRandomField(nn.Module):
             # Set score to the next score if this timestep is valid (mask == 1)
             # and save the index that produces the next score
             # shape: (batch_size, num_tags)
-            score = torch.where(mask[i].unsqueeze(1), next_score, score)
+            score = torch.where(mask[i].unsqueeze(1).byte(), next_score, score)
             history.append(indices)
 
         # End transition score
@@ -233,7 +234,7 @@ class ConditionalRandomField(nn.Module):
         # Now, compute the best path for each sample
 
         # shape: (batch_size,)
-        seq_ends = mask.long().sum(dim=0) - 1
+        seq_ends = mask.sum(dim=0).long() - 1
         best_tags_list = []
 
         for idx in range(batch_size):
@@ -250,6 +251,9 @@ class ConditionalRandomField(nn.Module):
 
             # Reverse the order because we start from the last timestep
             best_tags.reverse()
+
+            # pad
+            best_tags += [self.padding_idx] * (seq_length - seq_ends[idx] - 1)
             best_tags_list.append(best_tags)
 
-        return best_tags_list
+        return torch.LongTensor(best_tags_list)

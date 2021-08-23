@@ -27,7 +27,7 @@ scikit-learn
 ## Reference
 
 - Supervised Open Information Extraction. NAACL-HLT. 2018. [[paper]](https://aclanthology.org/N18-1081/)
-- Logician: A Unified End-to-End Neural Approach for Open-Domain Information Extraction. WSDM. [[paper]](https://doi.org/10.1145/3159652.3159712) [[zh-dataset-SAOKE]](https://ai.baidu.com/broad/introduction?dataset=saoke)
+- Logician: A Unified End-to-End Neural Approach for Open-Domain Information Extraction. WSDM. 2018. [[paper]](https://doi.org/10.1145/3159652.3159712) [[zh-dataset-SAOKE]](https://ai.baidu.com/broad/introduction?dataset=saoke)
 - Span Model for Open Information Extraction on Accurate Corpus. AAAI. 2020. [[paper]](https://aaai.org/ojs/index.php/AAAI/article/view/6497) [[github]](https://github.com/zhanjunlang/Span_OIE)
-- Multi^2OIE: Multilingual Open Information Extraction Based on Multi-Head Attention with BERT. [[paper]](https://arxiv.org/abs/2009.08128) [[github]](https://github.com/youngbin-ro/Multi2OIE)
+- Multi^2OIE: Multilingual Open Information Extraction Based on Multi-Head Attention with BERT. EMNLP. 2020. [[paper]](https://arxiv.org/abs/2009.08128) [[github]](https://github.com/youngbin-ro/Multi2OIE)
 
