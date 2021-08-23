@@ -162,15 +162,3 @@ class AlphaModel(torch.nn.Module):
         loss_arg = att_CE_Loss(hidden_arg, attention_mask, arg_label)
 
         return loss_pre, loss_arg
-
-
-if __name__ == '__main__':
-    config = AlphaConfig(pre_tag_size=3, arg_tag_size=9, pos_embedding_dim=64,
-                         fc_1_hidden_size=768, fc_1_dropout_rate=0.3, fc_2_hidden_size=768,
-                         fc_2_dropout_rate=0.3, pretrained_model_name_or_path='bert-base-multilingual-cased')
-    model = AlphaModel(config).eval()
-    model.load_state_dict(torch.load('../model_45.pth', map_location=torch.device('cpu')), strict=False)
-    text = ["微博内容不仅有哈士奇的照片，而且还配有生动的解说文字。",
-            "大夏大学（英語：The Great China University）是上海的一所已被撤销的私立大学，1951年与光华大学合并成立华东师范大学。其旧址在今华东师范大学中山北路校区。大夏大学校友会于1985年1月20日在华东师范大学成立。华东师范大学将大夏大学建校日（6月1日）作为学校每年的纪念日。2017年，华东师范大学组建大夏书院。"]
-    out = model(text)
-    print(out)

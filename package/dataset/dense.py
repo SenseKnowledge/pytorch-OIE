@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from package.utils import read_json_data
+from package.dataset import read_json_data
 from package.utils.dense import pre_tag2idx, arg_tag2idx
 from torch.utils.data import Dataset as _Dataset, DataLoader
 from transformers import PreTrainedTokenizer

@@ -17,7 +17,7 @@ config = BetaConfig(pretrained_model_name_or_path='bert-base-multilingual-cased'
 model = BetaModel(config).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-dataset = Dataset('./resource/SAOKE/SAOKE_DATA.json.json', model.tokenizer)
+dataset = Dataset('./resource/OIE2016/train.oie.json', model.tokenizer)
 dataloader = DataLoader(dataset, batch_size=128, collate_fn=dataset.collate_fn, shuffle=True, num_workers=num_workers)
 
 if __name__ == '__main__':
@@ -29,7 +29,11 @@ if __name__ == '__main__':
 
                 input_ids, mask, pre_label_all, pre_label, arg_label = [_.to(device) for _ in batch]
 
-                loss_pre, loss_arg = model.loss(input_ids, mask, pre_label_all, pre_label, arg_label)
+                try:
+                    loss_pre, loss_arg = model.loss(input_ids, mask, pre_label_all, pre_label, arg_label)
+                except:
+                    # skip noisy data
+                    continue
 
                 loss = loss_pre + loss_arg
 
